@@ -4,7 +4,7 @@ from groq import Groq # Importar librerias
 # configuracion de la ventana de la web
 st.set_page_config(page_title="ChatBot", page_icon="👾")
 
-#posicion      0           1           2
+#posicion            0           1                     2
 MODELOS = ['llama3-8b-8192', 'llama3-70b-8192', 'mixtral-8x7b-32768']
 
 # Nos conecta con la API, creando un usuario
@@ -13,11 +13,13 @@ def crerUsuarioGroq():
     return Groq(api_key = claveSecreta)
 
 #Selecciona el modelo de la IA
-def configurarModelo(cliente,modelo,mensajeDeEntrada):
+def configurarModelo(cliente, modelo, historial):
+    historial = historial[-100:]  # Esto toma solo los últimos 100 elementos de la lista para evitar sobrecargar el historial
+    mensajes_para_api = [{"role": msg["role"], "content": msg["content"]} for msg in historial] # Crea una lista de mensajes en el formato requerido (para coherencia)
     return cliente.chat.completions.create(
-        model = modelo, #Seleccion el modelo de IA
-        messages = [{"role":"user", "content" : mensajeDeEntrada}],
-        stream = True #funcionalidad para q la IA me responda en tiempo real
+        model=modelo, #Seleccion el modelo de IA
+        messages=mensajes_para_api,  # Pasa la lista de mensajes en el formato correcto (y limitada)
+        stream=True #funcionalidad para q la IA me responda en tiempo real
     ) # Devuelve la respuesta que manda la IA
 
 # Historial de mensaje
@@ -34,7 +36,7 @@ def configurarPagina():
         # en la barra de navegacion hay un cuadrito de opciones para interactuar (titulo,opciones,valorPorDefecto)
         "Elegir modelo", #Titulo
         options = MODELOS, # opciones q Tienen q estar en una lista
-        index = 0 # valor por defecto (de las opciones, segun su posicion)
+        index = 1 # valor por defecto (de las opciones, segun su posicion)
         )
     return opcion #! AGREGAMOS ESTO PARA OBTENER EL NOMBRE DEL MODELO
     
@@ -73,15 +75,20 @@ def main():
     inicializarEstado() # se crea en memoria el historial vacio
     areaChat() # Se crea el contenedor/agrupación de los mensajes
     mensaje = st.chat_input("Escribí un mensaje...")
-    #Verificar que cuando nos manden un mensaje tenga contenido (no este vacio)
-    if mensaje: #Si el mensaje es true (tiene contenido):
+    
+    #Verificar que cuando nos manden un mensaje tenga contenido (no este vacio):
+    if mensaje:  #Si el mensaje es true (tiene contenido):
+        # Añade el mensaje del usuario al historial
         actualizarHistorial("user", mensaje, "🤠") #Mostramos el mensaje por el chat
-        chatCompleto = configurarModelo(clienteUsuario,modelo,mensaje) # Obtenemos la respuesta de la IA
+        chatCompleto = configurarModelo(clienteUsuario, modelo, st.session_state.mensajes) # Obtenemos la respuesta de la IA (Llama a la API con el historial completo en el formato adecuado)
+        
         if chatCompleto: # verificar q la variable tenga algo (x si se rompe la api o algo)
             with st.chat_message("assistant"):
                 respuestaCompleta = st.write_stream(generarRespuesta(chatCompleto))
+                
+                # Añade la respuesta de la IA al historial
                 actualizarHistorial("assistant", respuestaCompleta, "🤖") #Mostramos el mensaje completo de la IA
-                st.rerun() # actualizar (historial/chat) sin tocar f5
+                st.rerun()# actualizar (historial/chat) sin tocar f5
 
 if __name__ == "__main__": # le digo a python q mi funcion principal es main() (siempre la va a correr)
     main()
